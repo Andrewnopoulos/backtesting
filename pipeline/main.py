@@ -6,7 +6,7 @@ import os
 from dotenv import load_dotenv
 
 class MarketDataApp:
-    def __init__(self):
+    def __init__(self, simulation_mode: bool = False):
         # Load environment variables
         load_dotenv()
         
@@ -17,7 +17,9 @@ class MarketDataApp:
         self.stream = MarketDataStream(
             api_key=os.getenv('ALPACA_API_KEY'),
             secret_key=os.getenv('ALPACA_SECRET_KEY'),
-            paper=True
+            paper=True,
+            simulation_mode=simulation_mode,
+            symbols=["AAPL", "MSFT", "GOOGL", "AMZN"]  # Example symbols
         )
         self.processor = DataProcessor()
         
@@ -84,7 +86,7 @@ class MarketDataApp:
 
 def main():
     """Main entry point"""
-    app = MarketDataApp()
+    app = MarketDataApp(simulation_mode=True)
     
     try:
         asyncio.run(app.run())

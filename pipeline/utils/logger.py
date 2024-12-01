@@ -13,6 +13,11 @@ def setup_logger(
     """
     # Create logger
     logger = logging.getLogger(name)
+    
+    # Clear any existing handlers
+    if logger.hasHandlers():
+        logger.handlers.clear()
+        
     logger.setLevel(log_level)
     
     # Create formatter
@@ -37,9 +42,16 @@ def setup_logger(
     
     return logger
 
+
 def get_market_logger(log_file: Optional[str] = "logs/market_data.log") -> logging.Logger:
     """
     Get a pre-configured logger for market data operations.
+    
+    Args:
+        log_file (Optional[str]): Path to log file
+        
+    Returns:
+        logging.Logger: Configured market data logger
     """
     return setup_logger(
         name="market_data",

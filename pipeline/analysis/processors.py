@@ -22,23 +22,15 @@ class DataProcessor:
     def process_data(self, data: pd.DataFrame) -> Optional[ProcessedData]:
         """
         Process market data and detect signals.
-        
-        Args:
-            data (pd.DataFrame): Market data to process
-            
-        Returns:
-            Optional[ProcessedData]: Processed data and signals if valid
         """
-        # Validate input data
-        validation_result = self.validator.validate_price_data(data)
-        if not validation_result.is_valid:
-            self.logger.warning(
-                "Invalid market data received",
-                extra={'errors': str(validation_result.errors)}
-            )
-            return None
-            
         try:
+            # Rename columns to match expected format
+            data = data.copy()
+            if 'price' in data.columns:
+                data['close'] = data['price']
+            if 'size' in data.columns:
+                data['volume'] = data['size']
+            
             # Calculate metrics
             metrics = self.calculate_metrics(data)
             
@@ -59,12 +51,6 @@ class DataProcessor:
     def calculate_metrics(self, data: pd.DataFrame) -> Dict:
         """
         Calculate various market metrics.
-        
-        Args:
-            data (pd.DataFrame): Market data
-            
-        Returns:
-            Dict: Calculated metrics
         """
         metrics = {}
         
@@ -86,18 +72,27 @@ class DataProcessor:
     @staticmethod
     def calculate_vwap(data: pd.DataFrame) -> float:
         """Calculate Volume Weighted Average Price"""
-        return (data['price'] * data['size']).sum() / data['size'].sum()
+        try:
+            return (data['close'] * data['volume']).sum() / data['volume'].sum()
+        except Exception:
+            return 0.0
         
     @staticmethod
     def calculate_volatility(data: pd.DataFrame, window: int = 20) -> float:
         """Calculate price volatility"""
-        return data['price'].pct_change().rolling(window=window).std().iloc[-1]
+        try:
+            return data['close'].pct_change().rolling(window=window).std().iloc[-1]
+        except Exception:
+            return 0.0
         
     @staticmethod
     def calculate_rsi(data: pd.DataFrame, window: int = 14) -> float:
         """Calculate Relative Strength Index"""
-        delta = data['price'].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
-        rs = gain / loss
-        return 100 - (100 / (1 + rs.iloc[-1]))
+        try:
+            delta = data['close'].diff()
+            gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
+            rs = gain / loss
+            return 100 - (100 / (1 + rs.iloc[-1]))
+        except Exception:
+            return 50.0  # Return neutral RSI on error
