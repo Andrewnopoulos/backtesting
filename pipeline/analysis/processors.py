@@ -6,6 +6,14 @@ from utils.validators import MarketDataValidator
 from analysis.signals import SignalDetector, Signal
 from dataclasses import dataclass
 
+import pandas as pd
+import numpy as np
+from typing import Dict, Optional, List
+from utils.logger import get_market_logger
+from utils.validators import MarketDataValidator
+from analysis.signals import SignalDetector, Signal
+from dataclasses import dataclass
+
 @dataclass
 class ProcessedData:
     symbol: str
@@ -13,40 +21,75 @@ class ProcessedData:
     metrics: Dict
     signals: List[Signal]
 
+    def __str__(self):
+        """String representation for logging"""
+        signal_summary = [str(signal) for signal in self.signals]
+        return (f"ProcessedData for {self.symbol} at {self.timestamp}\n"
+                f"Metrics: {self.metrics}\n"
+                f"Signals: {signal_summary if signal_summary else 'None'}")
+
 class DataProcessor:
     def __init__(self, lookback_period: int = 20):
         self.logger = get_market_logger()
         self.validator = MarketDataValidator()
         self.signal_detector = SignalDetector(lookback_period=lookback_period)
+        self.last_signal_time = {}  # Track last signal time per symbol
         
     def process_data(self, data: pd.DataFrame) -> Optional[ProcessedData]:
         """
         Process market data and detect signals.
         """
-        try:
-            # Rename columns to match expected format
-            data = data.copy()
-            if 'price' in data.columns:
-                data['close'] = data['price']
-            if 'size' in data.columns:
-                data['volume'] = data['size']
-            
-            # Calculate metrics
-            metrics = self.calculate_metrics(data)
-            
-            # Detect signals
-            signals = self.signal_detector.detect_signals(data)
-            
-            return ProcessedData(
-                symbol=data['symbol'].iloc[-1],
-                timestamp=data.index[-1],
-                metrics=metrics,
-                signals=signals
+        # Validate input data
+        validation_result = self.validator.validate_price_data(data)
+        if not validation_result.is_valid:
+            self.logger.warning(
+                f"Invalid market data received: {validation_result.errors}"
             )
+            return None
+            
+        try:
+            # Group data by symbol
+            grouped = data.groupby('symbol')
+            processed_results = []
+            
+            for symbol, symbol_data in grouped:
+                # Calculate metrics
+                metrics = self.calculate_metrics(symbol_data)
+                
+                # Detect signals
+                signals = self.signal_detector.detect_signals(symbol_data)
+                
+                if signals:
+                    # Filter out signals too close to previous ones
+                    signals = self.filter_recent_signals(symbol, signals)
+                    
+                    if signals:
+                        processed = ProcessedData(
+                            symbol=symbol,
+                            timestamp=symbol_data.index[-1],
+                            metrics=metrics,
+                            signals=signals
+                        )
+                        processed_results.append(processed)
+                        self.logger.info(f"Processed data with signals: {processed}")
+            
+            return processed_results if processed_results else None
             
         except Exception as e:
             self.logger.error(f"Error processing market data: {str(e)}")
             return None
+
+    def filter_recent_signals(self, symbol: str, signals: List[Signal], min_interval_seconds: int = 60) -> List[Signal]:
+        """Filter out signals that are too close to previous ones"""
+        current_time = pd.Timestamp.now()
+        if symbol in self.last_signal_time:
+            time_since_last = (current_time - self.last_signal_time[symbol]).total_seconds()
+            if time_since_last < min_interval_seconds:
+                return []
+        
+        if signals:
+            self.last_signal_time[symbol] = current_time
+        return signals
             
     def calculate_metrics(self, data: pd.DataFrame) -> Dict:
         """

@@ -31,6 +31,10 @@ class MarketDataApp:
                 data = self.stream.get_current_data()
                 
                 if not data.empty:
+                    data = data.rename(columns={
+                        'price': 'close',
+                        'size': 'volume'
+                    })
                     # Process data and detect signals
                     processed_data = self.processor.process_data(data)
                     
