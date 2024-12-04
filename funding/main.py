@@ -67,6 +67,9 @@ class ExchangeInterface:
                     future_market = next(m for m in markets if m['id'] == f"{symbol}USDT")
                     funding_info = exchange.fetch_funding_rate(future_market['symbol'])
                     funding_rates[exchange_name] = float(funding_info['fundingRate'])
+            
+                # TODO add more exchanges
+                # or generalise to use any exchange universally
                 
             except Exception as e:
                 self.logger.error(f"Error fetching funding rate from {exchange_name}: {str(e)}")
@@ -80,8 +83,8 @@ class ExchangeInterface:
         for exchange_name, exchange in self.exchanges.items():
             try:
                 # Fetch spot price
-                spot_ticker = await exchange.fetch_ticker(f"{symbol}/USDT")
-                perp_ticker = await exchange.fetch_ticker(f"{symbol}/USDT:USDT")
+                spot_ticker = exchange.fetch_ticker(f"{symbol}/USDT")
+                perp_ticker = exchange.fetch_ticker(f"{symbol}/USDT:USDT")
                 
                 prices[exchange_name] = {
                     'spot': float(spot_ticker['last']),
@@ -105,7 +108,7 @@ class ExchangeInterface:
             exchange_instance = self.exchanges[exchange]
             
             # Calculate precise amounts based on exchange minimums
-            market_info = await exchange_instance.fetch_market(f"{symbol}/USDT:USDT")
+            market_info = exchange_instance.fetch_market(f"{symbol}/USDT:USDT")
             min_amount = market_info.get('limits', {}).get('amount', {}).get('min', 0)
             precision = market_info.get('precision', {}).get('amount', 8)
             
